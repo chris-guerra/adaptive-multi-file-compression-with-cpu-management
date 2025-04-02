@@ -61,6 +61,17 @@ http://localhost:8000/docs
 
 #### API Endpoint
 
+GET /resource-usage
+
+Returns current resource usage metrics (CPU usage and disk I/O). Example response:
+```json
+{
+  "cpu_percent": 12.5,
+  "disk_read": 123456789,
+  "disk_write": 987654321
+}
+```
+
 POST /compress
 - Description: Compresses a file or folder based on adaptive strategies.
 - Parameters:
@@ -99,17 +110,29 @@ Upload a file or enter a folder path, select the compression level, and click Co
 
 ### Technical Details
 
-#### Dynamic Threshold Adjustment
-	•	The function get_dynamic_threshold() (from Step 1) calculates a threshold based on available memory.
-	•	This value determines whether folder compression runs sequentially (for large average file sizes) or in parallel (for many small files).
+### Adaptive Compression Logic
+- **Single File:**  
+  Compresses with full CPU power using the user‑specified (or maximum) thread count.
+- **Multiple Files:**  
+  Automatically decides whether to compress sequentially (for large average file sizes) or in parallel using dynamic thread allocation.
 
-#### Resource Usage Monitoring
-	•	The function log_resource_usage() uses psutil to capture and print CPU usage and disk I/O metrics.
-	•	These metrics are logged both before and after each compression task.
+### Dynamic Threshold Adjustment
+- Adjusts the processing strategy based on the average file size and available system memory. For instance, on systems with less available memory, the threshold is lowered to prevent oversubscription.
 
-#### File Type-Specific Compression
-	•	The function determine_compression_level() leverages Python’s mimetypes to inspect the file type.
-	•	Text files may have their compression level increased, while binary files might have it decreased.
+### Resource Usage Monitoring
+- Captures and logs CPU and disk I/O metrics via `psutil`.
+- Exposes these metrics through a dedicated endpoint (`/resource-usage`) so that a frontend (e.g., a Streamlit app) can poll and visualize resource usage in real time.
+
+### File Type-Specific Compression
+- Detects file types using `python-magic` (if installed) or Python’s built‑in `mimetypes` to adjust the compression level:
+  - **Text files:** Use a higher compression level for maximum size reduction.
+  - **Binary files (images, videos):** Use a lower compression level to avoid unnecessary processing.
+
+### Dynamic Thread Allocation and Selection
+- **Dynamic Allocation:**  
+  The backend can adjust threads per file based on real‑time CPU usage.
+- **User Selection via Streamlit:**  
+  The Streamlit interface lets users choose the thread count (from 1 to the maximum available), with the default set to the max CPU cores. This selection is passed to the API so that the compression strategy can be tuned as needed.
 
 ---
 

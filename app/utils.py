@@ -39,10 +39,8 @@ def get_dynamic_threshold(default=100 * 1024 * 1024):
     For instance, if available memory is low, lower the threshold.
     """
     mem = psutil.virtual_memory()
-    # Example: if available memory is less than 2GB, lower threshold to 50 MB.
     if mem.available < 2 * 1024**3:
         return 50 * 1024 * 1024
-    # Otherwise, use the default threshold.
     return default
 
 def determine_compression_level(input_file: str, default_level: int) -> int:
@@ -55,7 +53,6 @@ def determine_compression_level(input_file: str, default_level: int) -> int:
     mime_type = None
     if USE_MAGIC:
         try:
-            # Use magic for a more accurate MIME type detection.
             mime_type = magic.from_file(input_file, mime=True)
         except Exception as e:
             logger.error(f"magic error on file {input_file}: {e}")
@@ -111,10 +108,7 @@ def compress_file_with_pigz(input_file: str, compression_level: int, threads: in
                 check=True,
                 stdout=outfile
             )
-        subprocess.run(
-            ["pigz", "-t", compressed_file],
-            check=True
-        )
+        subprocess.run(["pigz", "-t", compressed_file], check=True)
         compressed_size = os.path.getsize(compressed_file)
         usage_after = log_resource_usage()
         
@@ -136,12 +130,13 @@ def compress_file_with_pigz(input_file: str, compression_level: int, threads: in
         logger.error(f"Compression failed for {input_file}: {e}")
         return {"success": False, "error": str(e), "compressed_file": compressed_file}
 
-def compress_folder_with_pigz(folder_path: str, compression_level: int) -> list:
+def compress_folder_with_pigz(folder_path: str, compression_level: int, threads: int = None) -> list:
     """
     Compress all files in a folder recursively.
-    Uses dynamic threshold adjustment (assumed to be already implemented) to decide:
+    Uses dynamic threshold adjustment to decide:
       - If average file size is large, process sequentially with full CPU usage.
       - Otherwise, process in parallel using dynamic thread allocation.
+    If a threads parameter is provided, it is used for all files.
     Returns a list of result dictionaries for each file.
     """
     file_paths = []
@@ -155,7 +150,7 @@ def compress_folder_with_pigz(folder_path: str, compression_level: int) -> list:
     if num_files == 0:
         return []
     elif num_files == 1:
-        return [compress_file_with_pigz(file_paths[0], compression_level, threads=os.cpu_count())]
+        return [compress_file_with_pigz(file_paths[0], compression_level, threads if threads is not None else os.cpu_count())]
     else:
         total_size = sum(os.path.getsize(fp) for fp in file_paths)
         avg_size = total_size / num_files
@@ -163,20 +158,19 @@ def compress_folder_with_pigz(folder_path: str, compression_level: int) -> list:
         results = []
         if avg_size > dynamic_threshold:
             for fp in file_paths:
-                result = compress_file_with_pigz(fp, compression_level, threads=os.cpu_count())
-                results.append(result)
+                results.append(compress_file_with_pigz(fp, compression_level, threads if threads is not None else os.cpu_count()))
         else:
             total_cpus = os.cpu_count()
-            # Dynamically adjust threads per file based on current system load.
-            threads_per_file = adjust_threads_for_file(total_cpus, num_files)
+            if threads is not None:
+                threads_per_file = threads
+            else:
+                threads_per_file = adjust_threads_for_file(total_cpus, num_files)
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future_to_file = {executor.submit(compress_file_with_pigz, fp, compression_level, threads_per_file): fp for fp in file_paths}
                 for future in concurrent.futures.as_completed(future_to_file):
                     try:
-                        result = future.result()
+                        results.append(future.result())
                     except Exception as e:
                         fp = future_to_file[future]
-                        result = {"success": False, "error": str(e), "compressed_file": fp + ".gz"}
-                    results.append(result)
+                        results.append({"success": False, "error": str(e), "compressed_file": fp + ".gz"})
         return results
-
