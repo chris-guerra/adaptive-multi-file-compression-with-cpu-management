@@ -1,5 +1,5 @@
-from typing import List
 from pydantic import BaseModel
+from typing import List
 
 class OperationResponse(BaseModel):
     file_path: str
@@ -7,5 +7,5 @@ class OperationResponse(BaseModel):
     compressed_size: int
     status: str
 
-class FolderOperationResponse(BaseModel):
+class MultiFileOperationResponse(BaseModel):
     files: List[OperationResponse]
