@@ -8,6 +8,19 @@ app = FastAPI(
     version="1.0"
 )
 
+@app.get("/resource-usage")
+def get_resource_usage():
+    """
+    Endpoint to return current resource usage metrics.
+    Returns:
+      {
+         "cpu_percent": <float>,
+         "disk_read": <int>,
+         "disk_write": <int>
+      }
+    """
+    return utils.log_resource_usage()
+
 @app.post("/compress", response_model=models.FolderOperationResponse)
 def compress(
     input_path: str = Query(..., description="Path to the file or folder to compress"),

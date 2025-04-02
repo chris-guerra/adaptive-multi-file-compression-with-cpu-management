@@ -1,42 +1,43 @@
-# 🗜️ Efficient Multi-File Compression API using Pigz with Adaptive Parallelism
+# 🗜️ Efficient Multi-File Compression API with Adaptive Parallelism and Resource-Aware Strategies
 
-### Overview
+## Overview
+This API provides a robust, high-performance solution for compressing files and folders using **Pigz** (the Parallel Implementation of Gzip). It intelligently adapts its compression strategy based on file characteristics and system resources. Whether compressing a single large file or many small files, the API optimizes the process by:
 
-This API provides a fast and efficient way to compress files and folders using Pigz (Parallel Implementation of Gzip). Unlike traditional compression methods that handle files one by one, this API intelligently decides between sequential and parallel compression based on file size and quantity, leveraging all available CPU cores for maximum performance.
-
----
-
-### Features and Benefits
-
-#### 🌟 Adaptive Compression Logic
-
-The API intelligently switches between:
-	•	Single File Compression: Uses all available CPU threads for maximum speed.
-	•	Multiple Files Compression:
-	•	Uses full CPU resources sequentially for large files.
-	•	Uses concurrent processing for many smaller files, distributing threads per file to optimize speed.
-
-#### 💡 Why This Approach Is Optimal
-	1.	Automatic Decision Making:
-	•	The API detects whether to use parallel or sequential processing based on file size and count.
-	2.	Adaptive Resource Management:
-	•	Prevents CPU oversubscription by balancing the number of threads per file.
-	3.	Optimal I/O Utilization:
-	•	Efficiently handles many small files by compressing in parallel.
-	•	Uses full CPU power for large files, reducing context switching.
-	4.	Intelligent Cleanup:
-	•	Only deletes the original file after successful compression and integrity check.
-
-#### ⚡ Performance Improvements
-	•	Compresses large files individually for maximum throughput.
-	•	Processes small to medium files concurrently to reduce overall time.
-	•	Utilizes all available CPU cores efficiently without causing resource contention.
+- **Dynamically Adjusting the Compression Threshold:** Automatically adapts how many files to process in parallel versus sequentially based on available system memory and file sizes.
+- **Resource Usage Monitoring:** Logs and monitors CPU and disk I/O metrics before and after compression to better understand performance and optimize processing.
+- **File Type-Specific Compression:** Adjusts the compression level depending on the file type (e.g., higher for text files, lower for binary files) to maximize efficiency and compression ratio.
 
 ---
 
-### Installation
+## Features and Benefits
 
-1.	Clone the repository:
+### Adaptive Compression Logic
+- **Single File:** Uses all available CPU cores for fast compression.
+- **Multiple Files:** 
+  - Automatically decides whether to compress files sequentially (for few large files) or in parallel (for many small files) based on a dynamic threshold.
+  - Prevents CPU oversubscription by distributing threads according to the number of files and system resources.
+
+### Dynamic Threshold Adjustment
+- The system dynamically adjusts the threshold (default ~100 MB) for switching between sequential and parallel processing based on available memory, ensuring optimal resource utilization even on lower-end machines.
+
+### Resource Usage Monitoring
+- **Logs CPU and Disk I/O Metrics:** Uses the `psutil` library to capture resource usage before and after compression.
+- This data helps in monitoring performance and could be used to further fine-tune the compression strategy.
+
+### File Type-Specific Compression
+- **MIME-Type Detection:** Automatically adjusts the compression level depending on whether the file is text or binary.
+  - **Text Files:** May use a higher compression level for better reduction.
+  - **Binary Files (e.g., images, videos):** Use a lower compression level to avoid wasting CPU cycles on files that are already compressed.
+
+### Robust Error Handling and Cleanup
+- Compresses files in place, writes output as `<filename>.gz`, and verifies integrity with the `-t` flag.
+- Attempts to delete the original file after successful compression; if deletion fails (e.g., for read-only files), the error is logged but the process still returns success.
+
+---
+
+## Installation
+
+1. **Clone the Repository:**
 ```bash
 git clone https://github.com/yourusername/pigz-compressor-api.git
 cd pigz-compressor-api
@@ -56,17 +57,32 @@ http://localhost:8000/docs
 
 ---
 
-#### Usage
+### Usage
 
-1. Compress a Single File
-```bash
-curl -X POST "http://localhost:8000/compress?input_path=/path/to/file.txt&compression_level=6"
+#### API Endpoint
+
+POST /compress
+- Description: Compresses a file or folder based on adaptive strategies.
+- Parameters:
+  - input_path (string, required): Path to the file or folder to compress.
+  - compression_level (integer, optional, default=6): Base compression level (1–9). This may be adjusted automatically based on file type.
+- Response:
+```json
+{
+  "files": [
+    {
+      "file_path": "/path/to/original.txt.gz",
+      "original_size": 123456,
+      "compressed_size": 65432,
+      "status": "success",
+      "usage_before": { "cpu_percent": 10.0, "disk_read": 1234567, "disk_write": 7654321 },
+      "usage_after": { "cpu_percent": 25.0, "disk_read": 2234567, "disk_write": 8654321 }
+    }
+  ]
+}
 ```
-2. Compress a Folder
-```bash
-curl -X POST "http://localhost:8000/compress?input_path=/path/to/folder&compression_level=6"
-```
-3. Using the Streamlit Interface
+
+#### Using the Streamlit Interface
 
 Start the Streamlit app:
 ```bash
@@ -81,53 +97,34 @@ Upload a file or enter a folder path, select the compression level, and click Co
 
 ---
 
-### API Endpoints
-
-#### POST /compress
-
-Compresses a file or a folder.
-- Parameters:
-  - input_path (string, required): The file or folder path.
-  - compression_level (integer, optional, default=6): Compression level (1-9).
-- Response:
-```json
-{
-  "files": [
-    {
-      "file_path": "path/to/compressed/file.gz",
-      "original_size": 123456,
-      "compressed_size": 65432,
-      "status": "success"
-    }
-  ]
-}
-```
-- Error Response:
-```json
-{
-  "detail": "Compression failed for file /path/to/file: Error message"
-}
-```
-
----
-
 ### Technical Details
 
-Logic Behind Compression Optimization
-1.	Single File Compression:
-  - Uses the -p flag with the number of CPU cores (os.cpu_count()).
-  - Ensures maximum CPU utilization for fast compression.
-2.	Multiple File Compression:
-  - Calculates the average file size.
-  - If the average size exceeds 100 MB, it compresses each file sequentially using all CPU threads.
-  - If the average size is smaller, it uses parallel processing:
-  - Distributes the number of threads among files to prevent CPU oversubscription.
-  - Compresses files concurrently using ThreadPoolExecutor.
-3.	Cleanup Logic:
-- After successful compression and integrity check (pigz -t), the original file is deleted.
-- If the integrity check fails, the original file remains intact.
+#### Dynamic Threshold Adjustment
+	•	The function get_dynamic_threshold() (from Step 1) calculates a threshold based on available memory.
+	•	This value determines whether folder compression runs sequentially (for large average file sizes) or in parallel (for many small files).
+
+#### Resource Usage Monitoring
+	•	The function log_resource_usage() uses psutil to capture and print CPU usage and disk I/O metrics.
+	•	These metrics are logged both before and after each compression task.
+
+#### File Type-Specific Compression
+	•	The function determine_compression_level() leverages Python’s mimetypes to inspect the file type.
+	•	Text files may have their compression level increased, while binary files might have it decreased.
 
 ---
+
+## Testing
+
+### Running the Test Suite
+
+Tests are written using pytest. To run all tests:
+```bash
+pytest --maxfail=1 --disable-warnings -q
+```
+Test Coverage
+- API Endpoint Tests: Ensure that single files, folders, and edge cases (e.g., read-only files) are handled as expected.
+- Utility Function Tests: Validate dynamic threshold adjustments, resource usage logging, and file type-specific compression level adjustments.
+- Resource and Performance Monitoring: Tests verify that resource metrics are captured correctly and used to inform the compression process.
 
 ### Performance Benchmarking
 
