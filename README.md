@@ -97,7 +97,7 @@ POST /compress
 
 Start the Streamlit app:
 ```bash
-streamlit run app/streamlit_app.py
+streamlit run streamlit_app.py
 ```
 Navigate to:
 ```
